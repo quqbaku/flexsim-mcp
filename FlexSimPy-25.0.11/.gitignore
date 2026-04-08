@@ -1,0 +1,16 @@
+﻿.vs
+x64
+*.dll
+*.exp
+*.pdb
+PyConnector310.lib
+out
+TestFlexSimPy/__pycache__
+flexsimcontent
+PyConnector/obj
+wix/bin
+*.fsm!
+*.pyd
+*.gz
+*.whl
+*.vcxproj.user
