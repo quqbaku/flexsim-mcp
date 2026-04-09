@@ -1,0 +1,47 @@
+# Ralph Progress Log
+Started: 2026-04-09
+---
+
+## Codebase Patterns
+- FlexSimPy environment has communication issues in this setup: evaluate() returns None, send()/receive() block
+- executor.fsm creation requires working FlexSimPy communication, creating circular dependency
+- The project relies on a circular dependency for US-001/US-002: need executor.fsm to test execute_script(), but need evaluate() to create executor.fsm
+- validate_model_spec() should return List[str] (issues list), not raise exception - US-006 updated this
+
+## 2026-04-09 - US-006 (Completed)
+- **Implemented:** ModelSpec JSON Schema validation improvements
+- **Files changed:**
+  - mcp_server/model_spec.py (SUPPORTED_TYPES expanded, validate_model_spec now returns List[str])
+  - mcp_server/translator.py (updated to handle new return type)
+- **Changes made:**
+  1. Added Combiner, Separator, MultiProcessor to SUPPORTED_TYPES
+  2. Changed validate_model_spec() from raising ModelValidationError to returning List[str]
+  3. Updated translator.py to check returned issues list and raise ModelBuildError if non-empty
+- **Verification:**
+  - All Python files compile successfully (py_compile)
+  - Manual tests verify: valid spec passes, missing Sink returns error with "Sink" keyword, unsupported types detected, Combiner type now accepted
+- **Learnings:**
+  - US-006 was implementable without FlexSim because it only modifies Python code structure
+  - The validate_model_spec function was incorrectly raising exceptions instead of returning issues list per acceptance criteria
+  - translator.py needed updating to handle the new return type (check list before proceeding)
+- **Status:** Completed - passes all acceptance criteria
+
+## 2026-04-09 - US-001 (Blocked)
+- **Attempted:** Generate executor.fsm using create_executor_model.py
+- **Files examined:**
+  - mcp_server/flexsim_client.py (execute_script() method exists)
+  - mcp_server/tools.py (flexsim_execute_script wrapper exists)
+  - docs/executor-fsm-guide.md (documentation complete)
+  - create_executor_model.py (creation script exists)
+- **Blocker encountered:**
+  - FlexSimPy launches successfully but:
+    - controller.evaluate() returns None (cannot execute creation scripts)
+    - controller.send()/receive() blocks/hangs
+    - Subsequent calls cause segmentation fault
+  - executor.fsm cannot be generated without working evaluate()
+- **Learnings:**
+  - The FlexSimPy SDK has environment-specific issues that prevent normal operation
+  - The acceptance criteria for US-001 cannot be met without a working FlexSim environment
+  - US-002 (execute_script) infrastructure exists but cannot be tested without executor.fsm
+- **Status:** Cannot complete - requires working FlexSimPy environment
+---

@@ -5,9 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from .errors import ModelValidationError
-
-SUPPORTED_TYPES = {"Source", "Queue", "Processor", "Sink"}
+SUPPORTED_TYPES = {"Source", "Queue", "Processor", "Sink", "Combiner", "Separator", "MultiProcessor"}
 
 
 @dataclass
@@ -71,8 +69,8 @@ def parse_model_spec(data: Dict[str, Any]) -> ModelSpec:
     )
 
 
-def validate_model_spec(spec: ModelSpec) -> None:
-    """校验 ModelSpec，异常形式返回问题。"""
+def validate_model_spec(spec: ModelSpec) -> List[str]:
+    """校验 ModelSpec，返回问题列表（空列表表示校验通过）。"""
     issues: List[str] = []
 
     _ensure(bool(spec.objects), "objects 列表不能为空。", issues)
@@ -94,6 +92,5 @@ def validate_model_spec(spec: ModelSpec) -> None:
     _ensure(has_source, "ModelSpec 中至少需要一个 Source。", issues)
     _ensure(has_sink, "ModelSpec 中至少需要一个 Sink。", issues)
 
-    if issues:
-        raise ModelValidationError("; ".join(issues))
+    return issues
 

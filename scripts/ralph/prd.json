@@ -1,0 +1,149 @@
+{
+  "project": "FlexSim MCP",
+  "branchName": "ralph/flexsim-mcp-integration",
+  "description": "FlexSim MCP 集成控制系统 - 通过 MCP 协议远程控制 FlexSim 仿真软件，实现建模仿真功能",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "创建 FlexScript 执行器模板模型",
+      "description": "As a developer, I need a pre-built FlexSim .fsm model that can receive FlexScript strings from Python, execute them, and return results, so that the MCP server can run arbitrary FlexScript code.",
+      "acceptanceCriteria": [
+        "在项目根目录生成 executor.fsm 预置模型文件",
+        "executor.fsm 内含 OnMessage 触发器，接收消息后执行 FlexScript 并回传",
+        "executor.fsm 可通过 controller.open('executor.fsm') 加载，不弹出阻塞对话框",
+        "提供配置文档说明制作过程",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "blocking: FlexScript execution channel"
+    },
+    {
+      "id": "US-002",
+      "title": "实现 send/receive FlexScript 执行通道",
+      "description": "As a developer, I need to implement execute_script() using send/receive mechanism, so that the MCP server can execute FlexScript code beyond simple node path evaluation.",
+      "acceptanceCriteria": [
+        "在 flexsim_client.py 中新增 execute_script(script: str) -> str 方法",
+        "execute_script() 内部：controller.send(script) → controller.receive() 读取结果",
+        "超时抛出 FlexSimError",
+        "execute_script('return time();') 返回非 None 字符串",
+        "execute_script(\"createinstance(library().find('Source'), model()); return 'ok';\") 返回 'ok'",
+        "smoke_eval.py 脚本覆盖上述工具的正常路径测试，并全部通过",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "blocking: same as US-001"
+    },
+    {
+      "id": "US-003",
+      "title": "flexsim_new_model 创建干净空模型",
+      "description": "As an MCP client, I need flexsim_new_model to reliably create a clean empty model without dialogs, so that I can start fresh simulations programmatically.",
+      "acceptanceCriteria": [
+        "new_model() 调用后 model().subnodes.length 等于最小状态",
+        "不弹出任何阻塞性 GUI 对话框",
+        "如果已加载 executor.fsm，需重新加载以维持执行通道",
+        "返回成功确认消息，包含当前模型对象数量",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "simple_production_line 模板构建端到端验证",
+      "description": "As an MCP client, I need to build and run a simple_production_line template end-to-end without manual intervention, so that I can verify the Phase 2 toolchain works correctly.",
+      "acceptanceCriteria": [
+        "flexsim_build_from_template(template_name='simple_production_line') 调用成功",
+        "flexsim_validate_model() 返回空问题列表",
+        "flexsim_reset() + flexsim_run_to_time(time=3600) 可成功运行",
+        "flexsim_get_performance_measure(name='Output') 返回大于 0 的数值",
+        "整个流程无需人工 GUI 操作",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "错误信息与兼容性完善",
+      "description": "As an MCP client, I need clear error messages from tools, so that I can debug failures without ambiguity.",
+      "acceptanceCriteria": [
+        "flexsim_add_object 对 type/object_type/objectType、x/y/z 字符串数字兼容已存在",
+        "所有 Phase 2 工具在 FlexScript 执行失败时返回包含 error 字段的 JSON",
+        "flexsim_get_model_tree 支持 detail_level 参数（'basic' 返回名称列表，'full' 返回含类型和坐标的 JSON）",
+        "smoke_eval.py 脚本覆盖上述工具的正常路径测试",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "ModelSpec JSON Schema 校验",
+      "description": "As a developer, I need model_spec.py to validate ModelSpec JSON structure before sending to FlexSim, so that I can catch schema errors early.",
+      "acceptanceCriteria": [
+        "validate_model_spec() 校验：objects 非空、type 在白名单内、name/x/y/z 必填",
+        "connections 引用的名称存在、至少含一个 Source 和一个 Sink",
+        "类型白名单：Source, Queue, Processor, Sink, Combiner, Separator, MultiProcessor",
+        "validate_model_spec() 返回 list[str]，每条为人类可读错误描述",
+        "对缺少 Sink 的 ModelSpec 返回含 'Sink' 关键字的错误条目",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "flexsim_build_from_spec MCP 工具",
+      "description": "As an AI client, I need to pass a complete ModelSpec JSON to build a custom simulation model in one call, so that I can create complex models programmatically.",
+      "acceptanceCriteria": [
+        "实现 flexsim_build_from_spec(spec: dict) -> str 工具",
+        "在 server.py 中注册为 MCP 可调用工具",
+        "内部调用 validate_model_spec() → ModelSpecTranslator.translate() → builder 调用",
+        "传入超市收银台 ModelSpec（含 3 个 Processor 并联）可成功构建并验证",
+        "校验失败时返回 {\"error\": \"...\", \"issues\": [...]}",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "flexsim_describe_to_model 自然语言建模工具",
+      "description": "As a user, I want to describe a simulation scenario in natural language and have the MCP tool automatically generate and build the model, so that I can create simulations without technical knowledge.",
+      "acceptanceCriteria": [
+        "实现 flexsim_describe_to_model(description: str) -> str 工具",
+        "工具内部将 description 结合 System Prompt 发送给 LLM 获取 ModelSpec JSON",
+        "获取到 ModelSpec 后自动调用 flexsim_build_from_spec 完成模型构建",
+        "返回消息包含：生成的 ModelSpec 摘要（对象数、连接数）+ 构建结果",
+        "对"建一条四台机器的生产线"的输入，能生成含 Source-Queue-4×Processor-Sink 拓扑",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Phase 3"
+    },
+    {
+      "id": "US-009",
+      "title": "仿真结果 AI 摘要工具",
+      "description": "As a user, I want to get natural language simulation result summaries instead of raw numbers, so that I can quickly understand simulation outcomes.",
+      "acceptanceCriteria": [
+        "实现 flexsim_summarize_results(metrics: list[str] | None = None) -> str 工具",
+        "自动调用 getPerformanceMeasure 收集 KPI",
+        "生成人类可读的仿真结果摘要",
+        "摘要包含：仿真时长、吞吐量、平均等待时间、关键瓶颈提示",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Phase 3"
+    }
+  ]
+}

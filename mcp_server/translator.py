@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from . import flexsim_builder
+from .errors import ModelBuildError
 from .model_spec import ModelSpec
 
 
@@ -16,7 +17,9 @@ class ModelSpecTranslator:
         from .model_spec import validate_model_spec
 
         # 1. 先做结构层面的 JSON/ModelSpec 校验
-        validate_model_spec(spec)
+        issues = validate_model_spec(spec)
+        if issues:
+            raise ModelBuildError("; ".join(issues))
 
         # 2. 创建对象
         for obj in spec.objects:
