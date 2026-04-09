@@ -63,4 +63,32 @@ Started: 2026-04-09
   - Proper error handling with FlexSimError allows graceful degradation
   - Tests show ○ (skipped) when executor.fsm is missing, not FAIL
 - **Status:** Committed - infrastructure ready for when FlexSim environment is available
+
+## 2026-04-09 - US-005 Compatibility Improvements (Partial)
+- **Implemented:** Compatibility improvements for flexsim_add_object and flexsim_get_model_tree
+- **Files changed:**
+  - mcp_server/tools.py (66 insertions, 19 deletions)
+  - scripts/smoke_eval.py (added test_us005_compatibility)
+- **Changes made:**
+  1. flexsim_add_object:
+     - Added object_type and objectType as aliases for type parameter
+     - Added string/number compatibility for x, y, z coordinates (converts to float)
+  2. flexsim_get_model_tree:
+     - Added detail_level parameter ('basic' or 'full')
+     - 'basic' returns name list (original behavior)
+     - 'full' returns JSON with type, name, and x/y/z coordinates
+  3. flexsim_new_model:
+     - Updated to call client.new_model() instead of open_model("")
+     - Now properly implements US-003 requirements
+  4. smoke_eval.py:
+     - Added test_us005_compatibility() function
+     - Tests string-to-float conversion, alias handling, detail_level validation
+- **Verification:**
+  - All Python files compile successfully (py_compile)
+  - Import tests pass
+- **Learnings:**
+  - US-005 improvements could be done without FlexSim running
+  - The linter may auto-format code which can introduce subtle changes
+  - detail_level 'full' mode returns JSON string that needs FlexSim to test properly
+- **Status:** Committed - Python-side changes complete, FlexSim integration tests pending
 ---
