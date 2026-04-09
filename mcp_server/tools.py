@@ -1,8 +1,10 @@
 """MCP 工具定义 - Phase 1 基础工具"""
 
-from typing import Optional
+from typing import Optional, Dict, Any
 from .flexsim_client import get_client
 from .session import get_session
+from . import flexsim_builder
+from .errors import ModelValidationError, ModelBuildError
 
 
 def _tool_wrapper(func):
@@ -169,3 +171,80 @@ def flexsim_get_object_info(client, name: str) -> str:
     return "对象未找到: {name}";
     """
     return client.evaluate(script)
+
+
+# === Phase 2：模型构建相关工具 ===
+
+
+@_tool_wrapper
+def flexsim_new_model(client, path: str = "") -> str:
+    """创建空白模型或打开指定模型文件。"""
+    # 复用现有 open_model 语义：空路径表示避免弹出对话框，继续当前模型。
+    return client.open_model(path)
+
+
+@_tool_wrapper
+def flexsim_add_object(
+    client,
+    type: str,
+    name: str,
+    x: float,
+    y: float,
+    z: float,
+    params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """添加一个 3D 对象到模型并设置位置/部分参数。"""
+    created = flexsim_builder.create_object(
+        client.controller,
+        type=type,
+        name=name,
+        x=x,
+        y=y,
+        z=z,
+        params=params or {},
+    )
+    return {"ok": True, "object": created}
+
+
+@_tool_wrapper
+def flexsim_connect_objects(client, source: str, target: str) -> Dict[str, Any]:
+    """连接两个对象的输出/输入端口。"""
+    flexsim_builder.connect_objects(client.controller, source=source, target=target)
+    return {"ok": True, "source": source, "target": target}
+
+
+@_tool_wrapper
+def flexsim_set_object_params(client, name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """为指定对象设置一组参数/labels。"""
+    flexsim_builder.apply_params(client.controller, name=name, params=params)
+    return {"ok": True, "name": name}
+
+
+@_tool_wrapper
+def flexsim_validate_model(client) -> Dict[str, Any]:
+    """验证当前模型的基本完整性。"""
+    try:
+        issues = flexsim_builder.validate_model(client.controller)
+        return {"ok": True, "issues": issues}
+    except ModelValidationError as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+@_tool_wrapper
+def flexsim_build_from_template(client, template_name: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """从预置模板快速构建模型。Phase 2 先仅支持 simple_production_line。"""
+    if template_name != "simple_production_line":
+        raise ModelBuildError(f"当前仅支持模板: simple_production_line，收到: {template_name}")
+
+    # 非参数化的最小版本：Source -> Queue -> Processor -> Sink
+    flexsim_builder.create_object(client.controller, type="Source", name="Source1", x=0, y=0, z=0, params=None)
+    flexsim_builder.create_object(client.controller, type="Queue", name="Buffer", x=10, y=0, z=0, params=None)
+    flexsim_builder.create_object(client.controller, type="Processor", name="Machine1", x=20, y=0, z=0, params=None)
+    flexsim_builder.create_object(client.controller, type="Sink", name="Exit", x=30, y=0, z=0, params=None)
+
+    flexsim_builder.connect_objects(client.controller, source="Source1", target="Buffer")
+    flexsim_builder.connect_objects(client.controller, source="Buffer", target="Machine1")
+    flexsim_builder.connect_objects(client.controller, source="Machine1", target="Exit")
+
+    tree = flexsim_builder.get_model_tree(client.controller)
+    return {"ok": True, "template": template_name, "objects": tree}
