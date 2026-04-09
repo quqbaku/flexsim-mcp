@@ -2,7 +2,7 @@
 
 通过 Model Context Protocol (MCP) 控制 FlexSim 仿真引擎，实现自然语言驱动的仿真建模与自动化。
 
-> 本项目基于 [SethGame/mcp_flexsim](https://github.com/SethGame/mcp_flexsim) 扩展，核心增量：支持从自然语言描述自动生成 FlexSim 模型。
+> 通过 Model Context Protocol (MCP) 控制 FlexSim 仿真引擎，实现自然语言驱动的仿真建模与自动化。
 
 ## 功能特性
 
@@ -174,7 +174,6 @@ python verify_stage1.py
 
 ## 参考资源
 
-- [SethGame/mcp_flexsim](https://github.com/SethGame/mcp_flexsim) — 基础参考
 - [FlexSim 官方文档](https://docs.flexsim.com/)
 - [FastMCP 框架](https://github.com/jlowin/fastmcp)
 - [MCP 协议规范](https://modelcontextprotocol.io)
