@@ -139,6 +139,21 @@ def flexsim_evaluate(client, expression: str) -> str:
     return client.evaluate(expression)
 
 
+@_tool_wrapper
+def flexsim_execute_script(client, script: str, timeout: float = 5.0) -> str:
+    """
+    通过 send/receive 机制执行 FlexScript 代码（US-001 核心方法）。
+
+    当 evaluate() 无法执行 FlexScript 时，使用此方法。
+    它通过 executor.fsm 模型接收 FlexScript 字符串、执行并返回结果。
+
+    Args:
+        script: 要执行的 FlexScript 代码
+        timeout: 超时时间（秒），默认 5 秒
+    """
+    return client.execute_script(script, timeout)
+
+
 # === 模型查询 ===
 
 @_tool_wrapper

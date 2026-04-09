@@ -133,6 +133,21 @@ def flexsim_evaluate(expression: str) -> str:
     return tools.flexsim_evaluate(expression)
 
 
+@mcp.tool()
+def flexsim_execute_script(script: str, timeout: float = 5.0) -> str:
+    """
+    通过 send/receive 机制执行 FlexScript 代码（US-001 核心方法）。
+
+    当 evaluate() 无法执行 FlexScript 时，使用此方法。
+    它通过 executor.fsm 模型接收 FlexScript 字符串、执行并返回结果。
+
+    Args:
+        script: 要执行的 FlexScript 代码
+        timeout: 超时时间（秒），默认 5 秒
+    """
+    return tools.flexsim_execute_script(script, timeout)
+
+
 # === 模型查询 ===
 
 @mcp.tool()
@@ -150,6 +165,79 @@ def flexsim_get_object_info(name: str) -> str:
         name: 对象名称
     """
     return tools.flexsim_get_object_info(name)
+
+
+# === Phase 2：模型构建 ===
+
+@mcp.tool()
+def flexsim_new_model(path: str = "") -> str:
+    """创建空白模型或打开指定模型文件（Phase 2）。"""
+    return tools.flexsim_new_model(path)
+
+
+@mcp.tool()
+def flexsim_add_object(
+    type: str | None = None,
+    name: str | None = None,
+    x: float | str | None = None,
+    y: float | str | None = None,
+    z: float | str | None = None,
+    params: dict | None = None,
+    # 兼容常见别名
+    object_type: str | None = None,
+    objectType: str | None = None,
+) -> dict:
+    """添加对象到模型（Phase 2）。"""
+    effective_type = type or object_type or objectType
+    if effective_type is None:
+        raise ValueError("缺少参数：type（或 object_type/objectType）")
+    if name is None:
+        raise ValueError("缺少参数：name")
+    if x is None or y is None or z is None:
+        raise ValueError("缺少参数：x/y/z")
+    return tools.flexsim_add_object(
+        type=effective_type,
+        name=name,
+        x=float(x),
+        y=float(y),
+        z=float(z),
+        params=params,
+    )
+
+
+@mcp.tool()
+def flexsim_connect_objects(source: str, target: str) -> dict:
+    """连接两个对象（Phase 2）。"""
+    return tools.flexsim_connect_objects(source=source, target=target)
+
+
+@mcp.tool()
+def flexsim_set_object_params(name: str, params: dict) -> dict:
+    """设置对象参数/labels（Phase 2）。"""
+    return tools.flexsim_set_object_params(name=name, params=params)
+
+
+@mcp.tool()
+def flexsim_validate_model() -> dict:
+    """验证模型完整性（Phase 2）。"""
+    return tools.flexsim_validate_model()
+
+
+@mcp.tool()
+def flexsim_build_from_template(
+    template_name: str | None = None,
+    params: dict | None = None,
+    # 兼容部分客户端的 camelCase / 误传字段
+    templateName: str | None = None,
+    path: str | None = None,
+) -> dict:
+    """从预置模板构建模型（Phase 2）。"""
+    _ = path  # 当前模板构建不使用路径参数，但允许客户端误传
+    effective_name = template_name or templateName
+    if not effective_name:
+        # 让 MCP 层直接报错更清晰
+        raise ValueError("缺少参数：template_name（或 templateName）")
+    return tools.flexsim_build_from_template(template_name=effective_name, params=params)
 
 
 # === 启动服务器 ===
