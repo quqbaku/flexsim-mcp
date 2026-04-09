@@ -121,6 +121,27 @@ Started: 2026-04-09
 
 ---
 
+## 2026-04-10 - US-007 (Completed - Python Side)
+- **Implemented:** flexsim_build_from_spec tool
+- **Files changed:**
+  - mcp_server/flexsim_builder.py (SUPPORTED_FIXED_TYPES expanded to 7 types)
+  - mcp_server/tools.py (flexsim_build_from_spec implementation at line 318-355)
+  - mcp_server/server.py (MCP tool registration at line 249, 265)
+- **Changes made:**
+  1. flexsim_build_from_spec accepts ModelSpec JSON, validates, translates, and builds
+  2. SUPPORTED_FIXED_TYPES expanded to include Combiner, Separator, MultiProcessor
+  3. Error handling returns {"error": "...", "issues": [...]} format on validation failure
+- **Verification:**
+  - All Python files compile successfully (py_compile)
+  - Import tests pass
+- **Learnings:**
+  - US-007 implementation was already present in tools.py (lines 318-355)
+  - The only missing piece was SUPPORTED_FIXED_TYPES not including new types from US-006
+  - FlexSim integration testing still blocked by environment issues
+- **Status:** Completed - Python-side implementation done, FlexSim integration tests pending
+
+---
+
 ## 现状总览（2026-04-09 最终快照）
 
 | 故事 | 标题 | 状态 |
@@ -131,7 +152,7 @@ Started: 2026-04-09
 | US-004 | simple_production_line 端到端验证 | ❌ 阻塞（依赖 US-001/002） |
 | US-005 | 错误信息与兼容性完善 | 🟡 Python 侧完成，FlexSim 集成待验 |
 | US-006 | ModelSpec JSON Schema 校验 | ✅ 完成 |
-| US-007 | flexsim_build_from_spec 工具 | ⬜ 未开始 |
+| US-007 | flexsim_build_from_spec 工具 | ✅ Python 侧完成 |
 | US-008 | flexsim_describe_to_model 自然语言建模 | ⬜ 未开始（Phase 3） |
 | US-009 | 仿真结果 AI 摘要工具 | ⬜ 未开始（Phase 3） |
 

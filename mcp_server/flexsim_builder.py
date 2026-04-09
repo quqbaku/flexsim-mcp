@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 from .errors import ModelBuildError, ModelValidationError, safe_evaluate
 
 
-SUPPORTED_FIXED_TYPES = {"Source", "Queue", "Processor", "Sink"}
+SUPPORTED_FIXED_TYPES = {"Source", "Queue", "Processor", "Sink", "Combiner", "Separator", "MultiProcessor"}
 
 
 @dataclass
