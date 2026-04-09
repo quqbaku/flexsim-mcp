@@ -157,17 +157,40 @@ def flexsim_execute_script(client, script: str, timeout: float = 5.0) -> str:
 # === 模型查询 ===
 
 @_tool_wrapper
-def flexsim_get_model_tree(client) -> str:
-    """获取模型中所有对象的树状结构"""
-    script = """
-    string s = "";
-    for (int i = 1; i <= model().subnodes.length; i++) {
-        Object obj = model().subnodes[i];
-        s += "[" + i + "] " + obj.name + "\\n";
-    }
-    return s;
+def flexsim_get_model_tree(client, detail_level: str = "basic") -> str:
     """
-    return client.evaluate(script)
+    获取模型中所有对象的树状结构
+
+    Args:
+        detail_level: 'basic' 返回名称列表（每行一个），'full' 返回含类型和坐标的 JSON
+    """
+    if detail_level == "basic":
+        script = """
+        string s = "";
+        for (int i = 1; i <= model().subnodes.length; i++) {
+            Object obj = model().subnodes[i];
+            s += "[" + i + "] " + obj.name + "\\n";
+        }
+        return s;
+        """
+        return client.evaluate(script)
+    elif detail_level == "full":
+        script = """
+        string s = "[";
+        for (int i = 1; i <= model().subnodes.length; i++) {
+            Object obj = model().subnodes[i];
+            if (i > 1) s += ",";
+            s += "{\\"name\\":\\"" + obj.name + "\\",\\"type\\":\\"" + obj.className + "\\",";
+            s += "\\"x\\":" + numtostring(obj.x) + ",";
+            s += "\\"y\\":" + numtostring(obj.y) + ",";
+            s += "\\"z\\":" + numtostring(obj.z) + "}";
+        }
+        s += "]";
+        return s;
+        """
+        return client.evaluate(script)
+    else:
+        raise ValueError(f"detail_level must be 'basic' or 'full', got: {detail_level}")
 
 
 @_tool_wrapper
@@ -192,10 +215,17 @@ def flexsim_get_object_info(client, name: str) -> str:
 
 
 @_tool_wrapper
-def flexsim_new_model(client, path: str = "") -> str:
-    """创建空白模型或打开指定模型文件。"""
-    # 复用现有 open_model 语义：空路径表示避免弹出对话框，继续当前模型。
-    return client.open_model(path)
+def flexsim_new_model(client) -> dict:
+    """
+    创建空白模型（US-003）。
+
+    内部调用 client.new_model() 创建全新的空 FlexSim 模型，
+    如果 executor.fsm 之前已加载则重新加载以维持执行通道。
+
+    Returns:
+        dict: 包含 'ok'、'message'（成功确认消息）和 'object_count'（模型对象数量）
+    """
+    return client.new_model()
 
 
 @_tool_wrapper
@@ -207,15 +237,32 @@ def flexsim_add_object(
     y: float,
     z: float,
     params: Optional[Dict[str, Any]] = None,
+    object_type: Optional[str] = None,
+    objectType: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """添加一个 3D 对象到模型并设置位置/部分参数。"""
+    """添加一个 3D 对象到模型并设置位置/部分参数。
+
+    Args:
+        type: 对象类型（支持 'Source', 'Queue', 'Processor', 'Sink' 等）
+        name: 对象名称
+        x, y, z: 位置坐标（支持字符串或数字）
+        params: 可选参数字典
+        object_type, objectType: type 的别名，兼容不同命名风格
+    """
+    # 兼容 type/object_type/objectType 不同命名
+    obj_type = type or object_type or objectType
+    # 兼容字符串和数字坐标
+    x_val = float(x) if isinstance(x, (int, str)) else x
+    y_val = float(y) if isinstance(y, (int, str)) else y
+    z_val = float(z) if isinstance(z, (int, str)) else z
+
     created = flexsim_builder.create_object(
         client.controller,
-        type=type,
+        type=obj_type,
         name=name,
-        x=x,
-        y=y,
-        z=z,
+        x=x_val,
+        y=y_val,
+        z=z_val,
         params=params or {},
     )
     return {"ok": True, "object": created}
