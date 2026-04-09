@@ -44,4 +44,23 @@ Started: 2026-04-09
   - The acceptance criteria for US-001 cannot be met without a working FlexSim environment
   - US-002 (execute_script) infrastructure exists but cannot be tested without executor.fsm
 - **Status:** Cannot complete - requires working FlexSimPy environment
+
+## 2026-04-09 - smoke_eval.py Infrastructure (Partial)
+- **Implemented:** Improved smoke_eval.py test infrastructure for execute_script()
+- **Files changed:**
+  - scripts/smoke_eval.py (complete rewrite with structured tests)
+- **Changes made:**
+  1. Added test_execute_script() function with comprehensive error handling
+  2. Added test_evaluate() and test_connection() helper functions
+  3. Tests for 'return time();' and createinstance() scenarios
+  4. Graceful handling when executor.fsm is missing (shows ○ instead of ✗)
+  5. Clear summary output with PASS/FAIL indicators
+- **Verification:**
+  - Python syntax verified (py_compile)
+  - Import test successful
+- **Learnings:**
+  - The smoke_eval.py tests can be improved even without working FlexSim
+  - Proper error handling with FlexSimError allows graceful degradation
+  - Tests show ○ (skipped) when executor.fsm is missing, not FAIL
+- **Status:** Committed - infrastructure ready for when FlexSim environment is available
 ---
