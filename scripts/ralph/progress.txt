@@ -92,3 +92,90 @@ Started: 2026-04-09
   - detail_level 'full' mode returns JSON string that needs FlexSim to test properly
 - **Status:** Committed - Python-side changes complete, FlexSim integration tests pending
 ---
+
+## 2026-04-09 - US-003 (Completed)
+- **Implemented:** flexsim_new_model creates clean empty model
+- **Files changed:**
+  - mcp_server/flexsim_client.py (added new_model() method)
+  - mcp_server/tools.py (wrapper already updated in US-005 work)
+- **Changes made:**
+  1. Added new_model() method to FlexSimClient class that:
+     - Calls controller.open("") to create a new empty model
+     - Preserves executor.fsm state (reloads if was previously loaded)
+     - Returns dict with ok, message, and object_count
+  2. The flexsim_new_model tool wrapper was already updated (per US-005 entry)
+- **Verification:**
+  - All Python files compile successfully (py_compile)
+  - Import tests pass
+- **Learnings:**
+  - US-003 implementation depends on controller.open("") which may trigger FlexSim file dialogs in certain configurations
+  - The actual behavior of creating a "clean empty model" depends on FlexSim environment settings
+  - Testing requires a working FlexSim environment (same blocker as US-001/US-002)
+- **Status:** Completed - code implementation done, requires FlexSim environment for full verification
+
+---
+
+## 2026-04-09 - US-005 (Status Update)
+- **Summary:** Python 侧变更已全部落地（参数别名、类型转换、detail_level、错误 JSON 包装），但 FlexSim 集成测试因环境阻塞无法执行。
+- **passes:** false（等待 FlexSim 环境可用后运行 smoke_eval.py 验收）
+
+---
+
+## 现状总览（2026-04-09 最终快照）
+
+| 故事 | 标题 | 状态 |
+|------|------|------|
+| US-001 | 创建 executor.fsm 执行器模板模型 | ❌ 阻塞（FlexSimPy evaluate/send 均不可用） |
+| US-002 | 实现 send/receive FlexScript 执行通道 | ❌ 阻塞（依赖 US-001） |
+| US-003 | flexsim_new_model 创建干净空模型 | ✅ 完成 |
+| US-004 | simple_production_line 端到端验证 | ❌ 阻塞（依赖 US-001/002） |
+| US-005 | 错误信息与兼容性完善 | 🟡 Python 侧完成，FlexSim 集成待验 |
+| US-006 | ModelSpec JSON Schema 校验 | ✅ 完成 |
+| US-007 | flexsim_build_from_spec 工具 | ⬜ 未开始 |
+| US-008 | flexsim_describe_to_model 自然语言建模 | ⬜ 未开始（Phase 3） |
+| US-009 | 仿真结果 AI 摘要工具 | ⬜ 未开始（Phase 3） |
+
+## 关键阻塞与建议
+
+### 根本阻塞原因
+FlexSimPy 在当前环境下：
+- `controller.evaluate(script)` → 返回 `None`（无法执行 FlexScript，仅支持节点路径求值）
+- `controller.send()` / `controller.receive()` → 挂起/段错误
+
+### 下一步建议（优先级排序）
+
+1. **P0 - 验证 FlexSim 基础环境**
+   - 手动运行 `FlexSimPy-25.0.11/TestFlexSimPy/TestFlexSimPy.py`（官方测试）
+   - 若 `TestSendReceive.fsm` 测试通过 → FlexSim 环境正常，问题在 config.toml 或路径配置
+   - 检查 `config.toml` 中 `program_dir` 是否指向正确的 FlexSim 安装目录
+
+2. **P1 - 手动创建 executor.fsm**
+   - 参考 `docs/executor-fsm-guide.md` 步骤，用 FlexSim GUI 手动创建并保存 executor.fsm
+   - 一旦 executor.fsm 存在，US-002 的 execute_script() 基础设施即可测试
+
+3. **P2 - 在环境修复后立即验证**
+   - 运行 `python scripts/smoke_eval.py` → 验证 US-002/US-005
+   - 运行 `flexsim_build_from_template('simple_production_line')` → 验证 US-004
+
+4. **P3 - 实现 US-007（flexsim_build_from_spec）**
+   - 纯 Python 侧实现，无需 FlexSim 运行即可完成代码编写
+   - 在 tools.py 添加工具函数，在 server.py 注册
+
+## 已交付文件清单
+
+新增（本轮迭代）：
+- `mcp_server/errors.py`（FlexSimError/ModelBuildError/ModelValidationError + safe_evaluate）
+- `mcp_server/flexsim_builder.py`（create_object/connect_objects/apply_params/get_model_tree/validate_model）
+- `mcp_server/model_spec.py`（ModelSpec 数据类 + validate_model_spec，支持7种类型白名单）
+- `mcp_server/translator.py`（ModelSpecTranslator.translate）
+- `create_executor_model.py`（executor.fsm 自动生成脚本，需 FlexSim 环境）
+- `docs/executor-fsm-guide.md`（手动制作 executor.fsm 指引）
+- `scripts/ralph/prd.json`（本轮 PRD）
+- `scripts/ralph/progress.txt`（本文档）
+
+修改（本轮迭代）：
+- `mcp_server/server.py`（注册 Phase 2 工具：new_model/add_object/connect_objects/set_object_params/validate_model/build_from_template/execute_script）
+- `mcp_server/tools.py`（Phase 2 工具实现 + 参数别名兼容 + detail_level + execute_script 包装）
+- `mcp_server/flexsim_client.py`（new_model + execute_script + send/receive 封装）
+- `scripts/smoke_eval.py`（结构化测试覆盖 US-002/US-005）
+---
