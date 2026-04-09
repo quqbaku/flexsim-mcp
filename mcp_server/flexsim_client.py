@@ -137,6 +137,41 @@ class FlexSimClient:
             self.controller.open(path)
             return f"已打开模型: {path}"
 
+    def new_model(self) -> dict:
+        """
+        创建空白模型（US-003 实现）。
+
+        调用 controller.open("") 创建全新的空模型，并返回模型状态信息。
+        如果 executor.fsm 已加载，会重新加载以维持执行通道。
+
+        Returns:
+            dict: 包含 'ok'、'message' 和 'object_count' 的字典
+        """
+        # 保存 executor 是否已加载的状态
+        executor_was_loaded = self._executor_loaded
+
+        # 创建新空模型 - 使用 open("") 创建空白模型
+        self.controller.open("")
+
+        # 重置执行器加载状态，重新加载以维持通道
+        self._executor_loaded = False
+        if executor_was_loaded:
+            self.load_executor()
+
+        # 获取当前模型对象数量
+        try:
+            script = "return numtostring(model().subnodes.length);"
+            result = safe_evaluate(self.controller, script, allow_none=True)
+            object_count = int(result.raw) if result.raw else 0
+        except (ValueError, Exception):
+            object_count = 0
+
+        return {
+            "ok": True,
+            "message": f"新模型已创建，当前模型对象数量: {object_count}",
+            "object_count": object_count
+        }
+
     def reset(self) -> str:
         """重置仿真"""
         self.controller.reset()
