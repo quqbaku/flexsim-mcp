@@ -2,7 +2,7 @@
 
 通过 Model Context Protocol (MCP) 控制 FlexSim 仿真引擎，实现自然语言驱动的仿真建模与自动化。
 
-> **Phase 2 状态（2026-04-09）**：建模工具层已完成，US-003（flexsim_new_model）和 US-006（ModelSpec 校验）已通过验收。FlexScript 执行通道（US-001/002）因 FlexSimPy SDK 限制暂时阻塞，需手动创建 `executor.fsm`（参考 `docs/executor-fsm-guide.md`）。
+> **项目状态（2026-04-10）**：Phase 1 ✅ 完成。Phase 2 Python 层完成，FlexScript 执行通道因 SDK 限制阻塞（US-001/002）。详细进度见 [`docs/进度总览.md`](docs/进度总览.md)。
 
 ## 功能特性
 
@@ -168,9 +168,9 @@ flexsim-mcp/
 │   └── session.py           # 会话管理
 ├── FlexSimPy-25.0.11/       # FlexSimPy SDK
 ├── docs/                    # 项目文档
-│   ├── 阶段2进度交接.md      # Phase 2 详细交接文档
-│   ├── executor-fsm-guide.md # 手动创建 executor.fsm 指引
-│   └── 项目计划大纲.md
+│   ├── 进度总览.md           # 各阶段完成状态与已知阻塞（主参考）
+│   ├── 项目计划大纲.md       # 系统架构与分阶段实施计划
+│   └── executor-fsm-guide.md # 手动创建 executor.fsm 分步指引
 ├── scripts/
 │   ├── smoke_eval.py        # 结构化冒烟测试
 │   └── ralph/               # Ralph AI 自动化任务文件

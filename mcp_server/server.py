@@ -151,9 +151,14 @@ def flexsim_execute_script(script: str, timeout: float = 5.0) -> str:
 # === 模型查询 ===
 
 @mcp.tool()
-def flexsim_get_model_tree() -> str:
-    """获取模型中所有对象的树状结构"""
-    return tools.flexsim_get_model_tree()
+def flexsim_get_model_tree(detail_level: str = "basic") -> str:
+    """
+    获取模型中所有对象的树状结构
+
+    Args:
+        detail_level: 'basic' 返回名称列表，'full' 返回含类型和坐标的 JSON
+    """
+    return tools.flexsim_get_model_tree(detail_level=detail_level)
 
 
 @mcp.tool()
@@ -238,6 +243,26 @@ def flexsim_build_from_template(
         # 让 MCP 层直接报错更清晰
         raise ValueError("缺少参数：template_name（或 templateName）")
     return tools.flexsim_build_from_template(template_name=effective_name, params=params)
+
+
+@mcp.tool()
+def flexsim_build_from_spec(spec: dict) -> dict:
+    """
+    根据 ModelSpec JSON 构建自定义仿真模型（US-007）。
+
+    传入完整的 ModelSpec JSON，内部自动完成：
+    1. 解析 JSON 为 ModelSpec 对象
+    2. 校验 ModelSpec 结构
+    3. 调用 ModelSpecTranslator.translate() 创建对象和连接
+
+    Args:
+        spec: ModelSpec 字典，包含 model_name, objects, connections, simulation
+
+    Returns:
+        dict: 包含 'ok' 和 'message'（成功消息或错误信息）
+              如果校验失败，返回 {'ok': False, 'error': '...', 'issues': [...]}
+    """
+    return tools.flexsim_build_from_spec(spec)
 
 
 # === 启动服务器 ===

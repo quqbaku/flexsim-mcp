@@ -1,3 +1,67 @@
+# executor.fsm 创建指南
+
+`executor.fsm` 是项目根目录中必须存在的 FlexSim 模型文件，用于通过 `send/receive` 通道执行任意 FlexScript。
+
+> **背景与阻塞状态**：参见 `docs/进度交接.md` § 5.2。
+
+---
+
+## 手动创建步骤（推荐）
+
+1. 打开 FlexSim 2026 GUI，新建空模型
+2. 从 3D Library 拖一个 **BasicFR** 对象到模型中
+3. 重命名为 `FlexScriptExecutor`
+4. 在属性面板将位置设为 `(1000, 1000, 0)`（移到视野外）
+5. 为该对象添加 **OnMessage** 触发器
+6. 将以下代码粘贴到触发器中：
+
+```flexscript
+string flexscriptCode = parstr(1);
+Variant result = evaluate(flexscriptCode);
+sendToController(result);
+return 1;
+```
+
+7. **File > Save As** → 保存到项目根目录，文件名 `executor.fsm`
+
+---
+
+## 验证
+
+```bash
+python scripts/smoke_eval.py
+```
+
+至少应满足：
+- 不出现 `executor.fsm 未找到`
+- `execute_script("return time();")` 返回非空结果
+
+---
+
+## 通信协议说明
+
+```
+Python                           FlexSim (executor.fsm)
+------                           ----------------------
+controller.send(flexscript)  →   OnMessage 触发器激活
+                                 parstr(1) 获取脚本字符串
+                                 evaluate() 执行脚本
+                                 sendToController(result)  →  controller.receive() 返回结果
+```
+
+> ⚠️ 必须用 `sendToController(result)`，而非 `sendtomain(result)`。
+> `sendtomain` 发送到 FlexSim UI 队列，**不会**解除 Python 端 `controller.receive()` 的等待。
+
+---
+
+## 故障排除
+
+| 症状 | 可能原因 | 处理 |
+|------|----------|------|
+| `executor.fsm 未找到` | 文件不在项目根目录 | 按本文档步骤手动创建 |
+| `接收超时（5秒）` | OnMessage 触发器仍使用 `sendtomain` | 在 GUI 中修改并重新保存 |
+| `接收超时（5秒）` | executor 未正常运行 | 检查 FlexSim 进程；跑 `TestFlexSimPy.py` 验证环境 |
+| `evaluate()` 返回空 | SDK 限制（无 GUI 模式） | 正常，`execute_script()` 是替代方案 |
 # executor.fsm 执行器模型说明
 
 ## 概述

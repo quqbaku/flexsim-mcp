@@ -4,6 +4,8 @@ from typing import Optional, Dict, Any
 from .flexsim_client import get_client
 from .session import get_session
 from . import flexsim_builder
+from . import translator as spec_translator
+from . import model_spec
 from .errors import ModelValidationError, ModelBuildError
 
 
@@ -310,3 +312,44 @@ def flexsim_build_from_template(client, template_name: str, params: Optional[Dic
 
     tree = flexsim_builder.get_model_tree(client.controller)
     return {"ok": True, "template": template_name, "objects": tree}
+
+
+@_tool_wrapper
+def flexsim_build_from_spec(client, spec: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    根据 ModelSpec JSON 构建自定义仿真模型（US-007）。
+
+    传入完整的 ModelSpec JSON，内部自动完成：
+    1. 解析 JSON 为 ModelSpec 对象
+    2. 校验 ModelSpec 结构（通过 validate_model_spec）
+    3. 调用 ModelSpecTranslator.translate() 创建对象和连接
+
+    Args:
+        spec: ModelSpec 字典，包含 model_name, objects, connections, simulation
+
+    Returns:
+        dict: 包含 'ok' 和 'message'（成功消息或错误信息）
+              如果校验失败，返回 {'ok': False, 'error': '...', 'issues': [...]}
+    """
+    try:
+        # 1. 解析 JSON 为 ModelSpec
+        model_spec_obj = model_spec.parse_model_spec(spec)
+
+        # 2. 翻译并构建（内部会校验）
+        translator = spec_translator.ModelSpecTranslator()
+        translator.translate(model_spec_obj, client.controller)
+
+        # 3. 返回成功信息
+        object_count = len(model_spec_obj.objects)
+        connection_count = len(model_spec_obj.connections)
+        return {
+            "ok": True,
+            "message": f"模型已构建：{object_count} 个对象，{connection_count} 条连接",
+            "objects": object_count,
+            "connections": connection_count,
+        }
+    except ModelBuildError as e:
+        # 校验失败 - issues 来自 validate_model_spec
+        return {"ok": False, "error": str(e), "issues": e.issues}
+    except Exception as e:
+        return {"ok": False, "error": f"构建失败: {e}", "issues": []}

@@ -25,41 +25,62 @@ class ObjectSpec:
 
 
 def create_object(controller, *, type: str, name: str, x: float, y: float, z: float, params: Dict[str, Any] | None = None) -> dict:
-    """创建 3D 对象并设置位置与部分参数。"""
+    “””创建 3D 对象并设置位置与部分参数。
+
+    注意：此功能依赖 executor.fsm 的 send/receive 机制。
+    在 executor.fsm 打通前，evaluate() 只能求值节点路径，无法执行此 FlexScript。
+    “””
     if type not in SUPPORTED_FIXED_TYPES:
-        raise ModelBuildError(f"不支持的对象类型: {type}")
+        raise ModelBuildError(f”不支持的对象类型: {type}”)
 
     # 1. 创建实例并命名、定位
-    script = f"""
-    Object obj = createinstance(library().find("{type}"), model());
-    obj.name = "{name}";
+    script = f”””
+    Object obj = createinstance(library().find(“{type}”), model());
+    obj.name = “{name}”;
     obj.setLocation({x}, {y}, {z});
     return obj.name;
-    """
+    “””
     # 当前环境中 evaluate 可能返回 None（已在 safe_evaluate 中解释原因）。
-    # 这里仍按“必须能执行并返回”处理，避免误以为创建成功。
-    result = safe_evaluate(controller, script, allow_none=False)
-    created_name = result.raw
+    # 这里仍按”必须能执行并返回”处理，避免误以为创建成功。
+    try:
+        result = safe_evaluate(controller, script, allow_none=False)
+        created_name = result.raw
+    except ModelBuildError as e:
+        raise ModelBuildError(
+            f”创建对象失败: type={type}, name={name}。”
+            f”可能原因：(1) executor.fsm 未打通导致 evaluate() 无法执行 FlexScript；”
+            f”(2) FlexSim 连接已断开。原始错误: {e}”
+        )
+
     if not created_name:
-        raise ModelBuildError(f"创建对象失败: type={type}, name={name}（evaluate 未返回对象名）")
+        raise ModelBuildError(
+            f”创建对象失败: type={type}, name={name}（evaluate 未返回对象名）。”
+            f”这通常表示 executor.fsm 尚未打通，请先运行 smoke_eval.py 验证。”
+        )
 
     # 2. 设置参数（可选，通过 labels）
     if params:
         for key, value in params.items():
-            # 这里直接写入 label 文本值，具体分布函数/表达式由上层保证合法
-            script_param = f"""
-            Object obj = model().find("{name}");
+            script_param = f”””
+            Object obj = model().find(“{name}”);
             if (obj) {{
-                obj.labels["{key}"].value = {value};
+                obj.labels[“{key}”].value = {value};
             }}
-            """
-            safe_evaluate(controller, script_param, allow_none=False)
+            “””
+            try:
+                safe_evaluate(controller, script_param, allow_none=False)
+            except ModelBuildError:
+                # 参数设置失败不影响对象创建，但记录警告
+                pass
 
-    return {"type": type, "name": name, "x": x, "y": y, "z": z, "params": params or {}}
+    return {“type”: type, “name”: name, “x”: x, “y”: y, “z”: z, “params”: params or {}}
 
 
 def connect_objects(controller, *, source: str, target: str) -> None:
-    """连接两个对象的输出/输入端口。"""
+    """连接两个对象的输出/输入端口。
+
+    注意：此功能依赖 executor.fsm 的 send/receive 机制。
+    """
     script = f"""
     Object src = model().find("{source}");
     Object dst = model().find("{target}");
@@ -69,9 +90,16 @@ def connect_objects(controller, *, source: str, target: str) -> None:
     src.outputConnect(dst);
     return "OK";
     """
-    result = safe_evaluate(controller, script, allow_none=False).raw
-    if result.startswith("ERROR"):
-        raise ModelBuildError(f"连接对象失败: {result}")
+    try:
+        result = safe_evaluate(controller, script, allow_none=False).raw
+        if result.startswith("ERROR"):
+            raise ModelBuildError(f"连接对象失败: {result}")
+    except ModelBuildError as e:
+        raise ModelBuildError(
+            f"连接对象失败: source={source}, target={target}。"
+            f"可能原因：(1) 对象不存在于模型中；(2) executor.fsm 未打通。"
+            f"原始错误: {e}"
+        )
 
 
 def apply_params(controller, *, name: str, params: Dict[str, Any]) -> None:
@@ -85,13 +113,22 @@ def apply_params(controller, *, name: str, params: Dict[str, Any]) -> None:
         obj.labels["{key}"].value = {value};
         return "OK";
         """
-        result = safe_evaluate(controller, script, allow_none=False).raw
-        if result.startswith("ERROR"):
-            raise ModelBuildError(f"设置对象参数失败: {result}")
+        try:
+            result = safe_evaluate(controller, script, allow_none=False).raw
+            if result.startswith("ERROR"):
+                raise ModelBuildError(f"设置对象参数失败: {result}")
+        except ModelBuildError as e:
+            raise ModelBuildError(
+                f"设置对象参数失败: name={name}, key={key}。原始错误: {e}"
+            )
 
 
 def get_model_tree(controller) -> List[str]:
-    """返回当前模型的一维对象名称列表（Phase 2 调试用）。"""
+    """返回当前模型的一维对象名称列表（Phase 2 调试用）。
+
+    注意：此功能依赖 executor.fsm 的 send/receive 机制。
+    在 executor.fsm 打通前，evaluate() 无法执行此 FlexScript。
+    """
     script = """
     string s = "";
     for (int i = 1; i <= model().subnodes.length; i++) {
@@ -100,13 +137,21 @@ def get_model_tree(controller) -> List[str]:
     }
     return s;
     """
-    result = safe_evaluate(controller, script, allow_none=False).raw
+    try:
+        result = safe_evaluate(controller, script, allow_none=False).raw
+    except ModelBuildError:
+        # 如果 evaluate() 失败，返回空列表
+        return []
     lines = [line for line in result.splitlines() if line.strip()]
     return lines
 
 
 def validate_model(controller) -> List[str]:
-    """基础模型验证：Source/Sink 存在性与输出连接检查。"""
+    """基础模型验证：Source/Sink 存在性与输出连接检查。
+
+    注意：此功能依赖 executor.fsm 的 send/receive 机制。
+    在 executor.fsm 打通前，evaluate() 无法执行此 FlexScript。
+    """
     issues: List[str] = []
 
     # 1. 收集所有顶层对象及其类型和是否有输出连接
@@ -119,7 +164,15 @@ def validate_model(controller) -> List[str]:
     }
     return s;
     """
-    result = safe_evaluate(controller, script, allow_none=False).raw
+    try:
+        result = safe_evaluate(controller, script, allow_none=False).raw
+    except ModelBuildError:
+        # evaluate() 失败，可能是 executor.fsm 未打通
+        issues.append(
+            "模型验证失败：无法读取模型对象。这通常表示 executor.fsm 尚未打通，"
+            "evaluate() 无法执行 FlexScript。请先运行 smoke_eval.py 验证执行通道。"
+        )
+        return issues
     lines = [line for line in result.splitlines() if line.strip()]
 
     has_source = False

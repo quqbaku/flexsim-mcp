@@ -12,6 +12,10 @@ class FlexSimError(Exception):
 class ModelBuildError(FlexSimError):
     """模型构建过程中出现的错误（脚本语法、对象不存在等）。"""
 
+    def __init__(self, message: str, issues: list | None = None):
+        super().__init__(message)
+        self.issues = issues or []
+
 
 class ModelValidationError(FlexSimError):
     """模型验证失败时抛出的异常。"""

@@ -19,7 +19,7 @@ class ModelSpecTranslator:
         # 1. 先做结构层面的 JSON/ModelSpec 校验
         issues = validate_model_spec(spec)
         if issues:
-            raise ModelBuildError("; ".join(issues))
+            raise ModelBuildError("; ".join(issues), issues=issues)
 
         # 2. 创建对象
         for obj in spec.objects:
