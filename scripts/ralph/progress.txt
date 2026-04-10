@@ -206,6 +206,22 @@ Started: 2026-04-09
   - the remaining blocker is now specifically the **message bridge design inside executor.fsm**, not file placement or launch configuration
 - **Status:** Blocker refined again - executor file exists, but protocol is still mismatched
 
+## 2026-04-10 - sendToController Patch Attempt (Follow-up)
+- **Attempted:** replace `sendtomain(result)` with `sendToController(result)` in both `create_executor_model.py` and the executor guide, then try two validation paths:
+  - rerun `create_executor_model.py`
+  - open existing root-level `executor.fsm` and overwrite `OnMessage` script via `evaluate()` + `saveModel()`
+- **Observed:**
+  - `create_executor_model.py` still hangs during model creation and does not produce a confirmed new save result
+  - direct overwrite attempt returns no useful value from `evaluate()`
+  - `executor.fsm` file timestamp remains unchanged (`2026-04-10 14:52:09`)
+  - `python scripts/smoke_eval.py` still fails on `execute_script()` timeout
+- **Conclusion:**
+  - changing the script text in repository files is not enough by itself
+  - in the current environment, we still cannot prove that the live `executor.fsm` model has actually been updated and saved through the Python/evaluate path
+  - route 1 did not unblock US-001/US-002
+- **Recommended next step:**
+  - inspect and modify the executor model directly in FlexSim GUI, or inspect the official `TestSendReceive.fsm` model interactively to copy the exact working trigger implementation
+
 ---
 
 ## 现状总览（2026-04-10 最新快照）

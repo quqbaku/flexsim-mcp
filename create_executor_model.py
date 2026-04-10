@@ -157,7 +157,7 @@ def create_executor_model():
 
     // 将结果发送回调用者
     // sendToController(result) 将结果发送回 Python 端
-    sendtomain(result);
+    sendToController(result);
 
     return 1;
     """

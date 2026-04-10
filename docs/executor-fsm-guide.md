@@ -17,7 +17,7 @@ Python 端                          FlexSim 端 (executor.fsm)
 -----------                        -----------------------
 1. controller.send(flexscript)  →  接收消息
 2.                               ←  execute_script() 执行
-3. controller.receive()         ←  sendtomain(result) 发送结果
+3. controller.receive()         ←  sendToController(result) 发送结果
 ```
 
 ## executor.fsm 模型结构
@@ -40,7 +40,7 @@ string flexscriptCode = parstr(1);
 Variant result = evaluate(flexscriptCode);
 
 // 将结果发送回调用者
-sendtomain(result);
+sendToController(result);
 
 return 1;
 ```
@@ -62,7 +62,7 @@ return 1;
 ```flexscript
 string flexscriptCode = parstr(1);
 Variant result = evaluate(flexscriptCode);
-sendtomain(result);
+sendToController(result);
 return 1;
 ```
 
@@ -129,7 +129,7 @@ FlexSimPy 内部调用 `sendToController()`，将消息放入队列。
 FlexSim 的 OnMessage 触发器被激活：
 - `parstr(1)` 获取消息内容（FlexScript 代码）
 - `evaluate()` 执行代码
-- `sendtomain()` 将结果发回
+- `sendToController()` 将结果发回
 
 ### 3. 结果接收 (Python ← FlexSim)
 
