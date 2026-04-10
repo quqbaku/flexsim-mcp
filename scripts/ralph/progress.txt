@@ -142,12 +142,78 @@ Started: 2026-04-09
 
 ---
 
-## 现状总览（2026-04-09 最终快照）
+## 2026-04-10 - Launch/Communication Chain Fix (Partial Unblock)
+- **Implemented:** narrowed the real blocker for US-001/US-002 by fixing launch configuration and send/receive runtime sequencing
+- **Files changed:**
+  - mcp_server/flexsim_client.py
+  - create_executor_model.py
+  - config.toml
+- **Changes made:**
+  1. Added program_dir normalization so both of these config forms work:
+     - `C:\Program Files\FlexSim 2026`
+     - `C:\Program Files\FlexSim 2026\program`
+  2. Fixed PATH injection bug that previously appended `program_dir/program`, which was wrong when config already pointed at the `program` directory
+  3. Changed default runtime config to `show_gui = false` to avoid Chromium/GPU child process failures seen under GUI launch
+  4. Updated `execute_script()` to match the official FlexSimPy communication pattern:
+     - load executor model
+     - `reset()`
+     - `run(speed)`
+     - then `send()/receive()`
+  5. Updated `create_executor_model.py` to use config-driven programDir resolution instead of hard-coded paths
+- **Verification:**
+  - `py_compile` passes for modified Python files
+  - `scripts/smoke_eval.py` now launches FlexSim cleanly without the previous `--type=gpu-process` / renderer crash spam
+  - `flexsim_evaluate("MAIN:/project/exec/time")` returns `0.0`
+  - `flexsim_evaluate("return time();")` still returns empty string
+- **Learnings:**
+  - The earlier "environment broken" conclusion was too broad; a real part of the failure was misconfiguration plus wrong send/receive timing
+  - FlexSimPy send/receive should only be used after the model is put into the same running state as the official `TestFlexSimPy.py` sample
+  - Even after launch stabilization, `evaluate()` still does not provide a usable FlexScript creation/save channel in this environment
+- **Status:** Partial unblock - launch/config/runtime sequencing fixed, but executor.fsm creation still blocked
+
+## 2026-04-10 - US-001 (Refined Status)
+- **Current state:** the blocker is no longer "FlexSim cannot launch". It is now specifically narrowed to "cannot produce executor.fsm via automated FlexScript model-building in the current evaluate channel".
+- **Observed behavior:**
+  - `create_executor_model.py` now starts FlexSim successfully
+  - script-stage outputs (`create result`, `add trigger result`, `save result`) still return `None`
+  - `executor.fsm` is not created on disk
+- **Implication:**
+  - US-001 is still blocked, but the remaining gap is much narrower and better defined than before
+  - manual GUI creation of `executor.fsm` is still the only reliable path currently identified
+
+## 2026-04-10 - US-002 (Refined Status)
+- **Current state:** transport/runtime side is now corrected in code, but cannot be accepted until a real executor model exists
+- **What is already fixed in code:**
+  - `execute_script()` no longer calls `send()/receive()` on an unprepared model
+  - executor runtime state is explicitly managed before communication
+- **What is still missing:**
+  - a working `executor.fsm` with `OnMessage` logic
+- **Implication:**
+  - US-002 infrastructure is stronger than before and is ready for validation immediately after executor.fsm is provided
+
+## 2026-04-10 - executor.fsm Validation Result (New Finding)
+- **Attempted:** validate manually placed `executor.fsm` by running `python scripts/smoke_eval.py`
+- **Observed:**
+  - root-level `executor.fsm` is detected correctly
+  - `execute_script('return time();')` times out
+  - `execute_script("createinstance(...); return 'ok';")` also times out
+- **Technical conclusion:**
+  - the current `executor.fsm` design is still not compatible with FlexSimPy's message return mechanism
+  - from `FlexSimPy.cpp`, `controller.receive()` only unblocks when FlexSim-side code pushes into the controller receive queue via `sendToController(...)`
+  - a plain `OnMessage` trigger with `sendtomain(result)` is therefore not sufficient to satisfy the current Python-side `receive()` contract
+- **Implication:**
+  - US-001 is not solved merely by placing an `executor.fsm` file in the correct directory
+  - the remaining blocker is now specifically the **message bridge design inside executor.fsm**, not file placement or launch configuration
+- **Status:** Blocker refined again - executor file exists, but protocol is still mismatched
+
+---
+
+## 现状总览（2026-04-10 最新快照）
 
 | 故事 | 标题 | 状态 |
 |------|------|------|
-| US-001 | 创建 executor.fsm 执行器模板模型 | ❌ 阻塞（FlexSimPy evaluate/send 均不可用） |
-| US-002 | 实现 send/receive FlexScript 执行通道 | ❌ 阻塞（依赖 US-001） |
+| US-001 | 创建 executor.fsm 执行器模板模型 | ❌ 阻塞（当前 executor 协议与 FlexSimPy receive 队列不匹配） |
+| US-002 | 实现 send/receive FlexScript 执行通道 | ❌ 阻塞（executor 已存在但回传超时） |
 | US-003 | flexsim_new_model 创建干净空模型 | ✅ 完成 |
 | US-004 | simple_production_line 端到端验证 | ❌ 阻塞（依赖 US-001/002） |
 | US-005 | 错误信息与兼容性完善 | 🟡 Python 侧完成，FlexSim 集成待验 |
@@ -160,27 +226,26 @@ Started: 2026-04-09
 
 ### 根本阻塞原因
 FlexSimPy 在当前环境下：
-- `controller.evaluate(script)` → 返回 `None`（无法执行 FlexScript，仅支持节点路径求值）
-- `controller.send()` / `controller.receive()` → 挂起/段错误
+- `controller.evaluate(script)` 对节点路径可用，但对 FlexScript 建模脚本仍只返回空结果，无法完成对象创建和模型保存的验收链路
+- `controller.send()` / `controller.receive()` 的调用时序问题已修复，但缺少 executor.fsm 仍无法完成真正验收
 
 ### 下一步建议（优先级排序）
 
-1. **P0 - 验证 FlexSim 基础环境**
-   - 手动运行 `FlexSimPy-25.0.11/TestFlexSimPy/TestFlexSimPy.py`（官方测试）
-   - 若 `TestSendReceive.fsm` 测试通过 → FlexSim 环境正常，问题在 config.toml 或路径配置
-   - 检查 `config.toml` 中 `program_dir` 是否指向正确的 FlexSim 安装目录
+1. **P0 - 手动创建 executor.fsm**
+  - 当前 launch/config/runtime 层问题已基本排除，最直接的剩余突破口仍是手工创建 executor.fsm
+  - 参考 `docs/executor-fsm-guide.md`，在 FlexSim GUI 中添加 `OnMessage` 触发器并保存到项目根目录
 
-2. **P1 - 手动创建 executor.fsm**
-   - 参考 `docs/executor-fsm-guide.md` 步骤，用 FlexSim GUI 手动创建并保存 executor.fsm
-   - 一旦 executor.fsm 存在，US-002 的 execute_script() 基础设施即可测试
+2. **P1 - 立即验证 US-002**
+  - 一旦 executor.fsm 存在，直接运行 `python scripts/smoke_eval.py`
+  - 重点看 `execute_script('return time();')` 和 `createinstance(...); return 'ok';` 两项
 
-3. **P2 - 在环境修复后立即验证**
-   - 运行 `python scripts/smoke_eval.py` → 验证 US-002/US-005
-   - 运行 `flexsim_build_from_template('simple_production_line')` → 验证 US-004
+3. **P2 - 验证 US-004 / US-005**
+  - 运行 `python scripts/smoke_eval.py` → 验证 US-005 集成侧
+  - 运行 `flexsim_build_from_template('simple_production_line')` → 验证 US-004
 
-4. **P3 - 实现 US-007（flexsim_build_from_spec）**
-   - 纯 Python 侧实现，无需 FlexSim 运行即可完成代码编写
-   - 在 tools.py 添加工具函数，在 server.py 注册
+4. **P3 - 补充 official sample 对照验证**
+  - 单独跑 `FlexSimPy-25.0.11/TestFlexSimPy/TestFlexSimPy.py`
+  - 如果官方 send/receive 正常而 executor 方案仍失败，就说明剩余问题只在 executor 模型设计，不在 FlexSimPy 通道本身
 
 ## 已交付文件清单
 

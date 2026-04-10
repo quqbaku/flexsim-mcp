@@ -13,21 +13,48 @@ from .errors import safe_evaluate, ModelBuildError, FlexSimError
 _flexsimpy = None
 
 
+def _resolve_program_dir(program_dir: str | None) -> str | None:
+    """将配置中的 FlexSim 安装目录规范化为 FlexSimPy.launch() 需要的 program 目录。
+
+    兼容两种写法：
+    - C:\\Program Files\\FlexSim 2026
+    - C:\\Program Files\\FlexSim 2026\\program
+    """
+    if not program_dir:
+        return None
+
+    path = Path(program_dir)
+    if path.name.lower() == "program":
+        return str(path)
+
+    program_path = path / "program"
+    if program_path.exists():
+        return str(program_path)
+
+    return str(path)
+
+
 def _add_flexsim_to_path():
     """将 FlexSim 目录添加到 Python 路径和系统 PATH"""
     config_path = Path(__file__).parent.parent / "config.toml"
     if config_path.exists():
         with open(config_path, "rb") as f:
             config = tomllib.load(f)
-        program_dir = config.get("flexsim", {}).get("program_dir")
-        if program_dir:
-            # 添加到 Python 路径（用于导入 FlexSimPy）
-            if program_dir not in sys.path:
-                sys.path.insert(0, program_dir)
-            # 添加到系统 PATH（用于 FlexSimPy.pyd 加载 flexsim.dll）
-            flexsim_bin = Path(program_dir) / "program"
-            if str(flexsim_bin) not in os.environ.get("PATH", ""):
-                os.environ["PATH"] = str(flexsim_bin) + os.pathsep + os.environ.get("PATH", "")
+        flexsim_config = config.get("flexsim", {})
+        program_dir = _resolve_program_dir(flexsim_config.get("program_dir"))
+        flexsimpy_module_dir = flexsim_config.get("flexsimpy_module_dir")
+
+        # 添加 FlexSimPy 模块路径（优先，因为包含 FlexSimPy.pyd）
+        if flexsimpy_module_dir and flexsimpy_module_dir not in sys.path:
+            sys.path.insert(0, flexsimpy_module_dir)
+
+        # 添加 FlexSim program 目录到 Python 路径（备用）
+        if program_dir and program_dir not in sys.path:
+            sys.path.insert(0, program_dir)
+
+        # 添加到系统 PATH（用于 FlexSimPy.pyd 加载 flexsim.dll）
+        if program_dir and program_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = program_dir + os.pathsep + os.environ.get("PATH", "")
 
 
 def _get_flexsimpy():
@@ -78,6 +105,7 @@ class FlexSimClient:
         self._controller = None
         self._config = None
         self._executor_loaded = False
+        self._executor_running = False
         self._receive_thread = None
         self._receive_result = None
         self._receive_event = threading.Event()
@@ -104,7 +132,8 @@ class FlexSimClient:
     def launch(self) -> str:
         """启动 FlexSim 进程（fp.launch 是模块级函数，返回 Controller）"""
         flexsim_config = self.config["flexsim"]
-        program_dir = flexsim_config.get("program_dir", "C:\\FlexSim")
+        configured_dir = flexsim_config.get("program_dir", "C:\\Program Files\\FlexSim 2026")
+        program_dir = _resolve_program_dir(configured_dir) or configured_dir
         evaluation_license = flexsim_config.get("evaluation_license", True)
         show_gui = flexsim_config.get("show_gui", False)
 
@@ -125,6 +154,8 @@ class FlexSimClient:
     def disconnect(self) -> str:
         """断开连接"""
         self._controller = None
+        self._executor_loaded = False
+        self._executor_running = False
         return "已断开 FlexSim 连接"
 
     # === 模型操作 ===
@@ -135,6 +166,8 @@ class FlexSimClient:
             return "未指定模型路径：已跳过 open() 以避免文件选择框阻塞，请提供 .fsm 路径或继续使用当前模型"
         else:
             self.controller.open(path)
+            self._executor_loaded = False
+            self._executor_running = False
             return f"已打开模型: {path}"
 
     def new_model(self) -> dict:
@@ -155,6 +188,7 @@ class FlexSimClient:
 
         # 重置执行器加载状态，重新加载以维持通道
         self._executor_loaded = False
+        self._executor_running = False
         if executor_was_loaded:
             self.load_executor()
 
@@ -255,7 +289,29 @@ class FlexSimClient:
 
         self.controller.open(executor_path)
         self._executor_loaded = True
+        self._executor_running = False
         return f"执行器已加载: {executor_path}"
+
+    def ensure_executor_running(self, speed: float = 10.0) -> str:
+        """确保 executor.fsm 已进入可通信运行态。
+
+        官方 TestFlexSimPy 示例在使用 send/receive 前会先执行：
+        open(model) -> reset() -> run(speed)
+        当前项目也需要遵循同样的时序，否则 send/receive 可能在同步模式下挂起。
+        """
+        if self.controller is None:
+            raise FlexSimError("尚未连接 FlexSim：请先调用 flexsim_launch 或 flexsim_connect。")
+
+        if not self._executor_loaded:
+            self.load_executor()
+
+        if self._executor_running:
+            return "执行器已处于运行态"
+
+        self.controller.reset()
+        self.controller.run(speed)
+        self._executor_running = True
+        return f"执行器已进入运行态 (speed={speed})"
 
     def _receive_with_timeout(self, timeout: float = 5.0) -> str:
         """
@@ -318,9 +374,8 @@ class FlexSimClient:
         if self.controller is None:
             raise FlexSimError("尚未连接 FlexSim：请先调用 flexsim_launch 或 flexsim_connect。")
 
-        # 确保执行器模型已加载
-        if not self._executor_loaded:
-            self.load_executor()
+        # 确保执行器模型已加载且已经进入官方示例要求的可通信运行态
+        self.ensure_executor_running()
 
         # 发送 FlexScript 代码
         self.controller.send(script)

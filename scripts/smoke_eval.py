@@ -6,12 +6,22 @@ Tests the core functionality of the MCP server tools including:
 - execute_script via send/receive mechanism (US-002)
 - Model tree queries (US-005)
 - flexsim_add_object compatibility (US-005)
+- flexsim_build_from_spec validation (US-007)
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from mcp_server.flexsim_client import get_client
-from mcp_server.errors import FlexSimError
+from mcp_server.errors import FlexSimError, ModelBuildError
+from mcp_server import model_spec
+from mcp_server import translator as spec_translator
+
+
+def _executor_exists() -> bool:
+    """Check whether executor.fsm exists at the expected project-root location."""
+    return (Path(__file__).resolve().parent.parent / "executor.fsm").exists()
 
 
 def test_us005_compatibility() -> bool:
@@ -131,6 +141,7 @@ def test_execute_script(c) -> bool:
     """
     print("\n=== execute_script() Tests (US-002) ===")
     passed = True
+    executor_present = _executor_exists()
 
     # Test 1: execute_script with time
     try:
@@ -145,8 +156,13 @@ def test_execute_script(c) -> bool:
             print(f"○ execute_script skipped: {e}")
             print("  (Cannot test without executor.fsm - run create_executor_model.py first)")
         elif "超时" in str(e):
-            print(f"○ execute_script timeout: {e}")
-            print("  (This is expected if FlexSim send/receive is not working)")
+            if executor_present:
+                print(f"✗ execute_script timeout with executor present: {e}")
+                print("  (executor.fsm 已存在，但结果未回传，说明消息回传链路仍未打通)")
+                passed = False
+            else:
+                print(f"○ execute_script timeout: {e}")
+                print("  (This is expected if FlexSim send/receive is not working)")
         else:
             print(f"✗ execute_script failed: {e}")
             passed = False
@@ -168,7 +184,11 @@ def test_execute_script(c) -> bool:
         if "executor.fsm 未找到" in str(e):
             print(f"○ execute_script(createinstance) skipped: executor.fsm not found")
         elif "超时" in str(e):
-            print(f"○ execute_script(createinstance) timeout: {e}")
+            if executor_present:
+                print(f"✗ execute_script(createinstance) timeout with executor present: {e}")
+                passed = False
+            else:
+                print(f"○ execute_script(createinstance) timeout: {e}")
         else:
             print(f"✗ execute_script(createinstance) failed: {e}")
             passed = False

@@ -3,6 +3,9 @@ program_dir = "C:\\Program Files\\FlexSim 2026"
 evaluation_license = true
 show_gui = false
 
+# FlexSimPy 模块路径（包含 FlexSimPy.pyd）
+flexsimpy_module_dir = "c:\\Users\\85273\\Desktop\\flexsim-mcp - 副本\\FlexSimPy-25.0.11\\out\\Rel_3_12"
+
 [server]
 host = "127.0.0.1"
 port = 8765

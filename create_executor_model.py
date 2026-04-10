@@ -16,23 +16,43 @@ import os
 import sys
 from pathlib import Path
 
+
+def resolve_program_dir(program_dir: str | None) -> str | None:
+    """将配置中的安装目录规范化为 FlexSimPy.launch() 需要的 program 目录。"""
+    if not program_dir:
+        return None
+
+    path = Path(program_dir)
+    if path.name.lower() == "program":
+        return str(path)
+
+    program_path = path / "program"
+    if program_path.exists():
+        return str(program_path)
+
+    return str(path)
+
+
 # 添加 FlexSim 路径
 def setup_flexsim_path():
     """从 config.toml 读取 FlexSim 路径并配置"""
     config_path = Path(__file__).parent / "config.toml"
+    resolved_program_dir = None
     if config_path.exists():
         import tomllib
         with open(config_path, "rb") as f:
             config = tomllib.load(f)
-        program_dir = config.get("flexsim", {}).get("program_dir")
+        program_dir = resolve_program_dir(config.get("flexsim", {}).get("program_dir"))
         if program_dir:
+            resolved_program_dir = program_dir
             if program_dir not in sys.path:
                 sys.path.insert(0, program_dir)
-            flexsim_bin = Path(program_dir) / "program"
-            if str(flexsim_bin) not in os.environ.get("PATH", ""):
-                os.environ["PATH"] = str(flexsim_bin) + os.pathsep + os.environ.get("PATH", "")
+            if program_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = program_dir + os.pathsep + os.environ.get("PATH", "")
 
-setup_flexsim_path()
+    return resolved_program_dir
+
+PROGRAM_DIR = setup_flexsim_path() or r"C:\Program Files\FlexSim 2026\program"
 
 import FlexSimPy as fp
 
@@ -57,10 +77,12 @@ def create_executor_model():
     controller = fp.launch(
         evaluationLicense=True,
         showGUI=False,
-        programDir=r"C:\Program Files\FlexSim 2026\program"
+        programDir=PROGRAM_DIR
     )
 
     print("创建执行器模型...")
+    controller.open("")
+    print("已创建空白模型")
 
     # 使用 FlexScript 创建执行器对象
     # 我们创建一个带有 OnMessage 触发器的对象
@@ -79,6 +101,13 @@ def create_executor_model():
 
     result = controller.evaluate(executor_script)
     print(f"创建结果: {result}")
+
+    verify_executor_script = r'''
+    Object executor = model().find("FlexScriptExecutor");
+    if (executor) return "executor_exists";
+    return "executor_missing";
+    '''
+    print(f"执行器检查: {controller.evaluate(verify_executor_script)}")
 
     # 添加 OnMessage 触发器到执行器对象
     # OnMessage 触发器的 eventType 是 2001
@@ -105,6 +134,15 @@ def create_executor_model():
 
     result = controller.evaluate(add_trigger_script)
     print(f"添加触发器结果: {result}")
+
+    verify_trigger_script = r'''
+    Object executor = model().find("FlexScriptExecutor");
+    if (!executor) return "executor_missing";
+    treenode onMsg = executor.find("eventtriggers/OnMessage");
+    if (onMsg) return "trigger_exists";
+    return "trigger_missing";
+    '''
+    print(f"触发器检查: {controller.evaluate(verify_trigger_script)}")
 
     # 设置 OnMessage 触发器的代码
     # 这是核心逻辑：当收到消息时，执行 FlexScript 并返回结果

@@ -47,32 +47,46 @@ return 1;
 
 ## 创建 executor.fsm
 
-### 步骤 1: 确保环境配置正确
+当前仓库环境下，`create_executor_model.py` 已可用于探测启动链路，但**还不能稳定生成可用的 `executor.fsm`**。因此这里的推荐路线已经改为：**优先手工创建，脚本仅用于调试，不作为主流程。**
 
-1. 安装 FlexSim 2026
-2. 编译 FlexSimPy 模块
-3. 配置 `config.toml` 中的 `program_dir`
+### 最短手工步骤
 
-### 步骤 2: 运行创建脚本
+1. 打开 FlexSim 2026 GUI。
+2. 新建空模型。
+3. 从 3D Library 拖一个 `BasicFR` 到模型里。
+4. 重命名为 `FlexScriptExecutor`。
+5. 将对象移动到视野外，例如 `(1000, 1000, 0)`。
+6. 给该对象添加 `OnMessage` 触发器。
+7. 将下面代码完整粘贴到 `OnMessage`：
 
-```bash
-cd flexsim-mcp
-python create_executor_model.py
+```flexscript
+string flexscriptCode = parstr(1);
+Variant result = evaluate(flexscriptCode);
+sendtomain(result);
+return 1;
 ```
 
-脚本将：
-1. 启动 FlexSim（无 GUI 模式）
-2. 创建 `FlexScriptExecutor` 对象
-3. 配置 OnMessage 触发器
-4. 保存模型为 `executor.fsm`
+8. 保存到项目根目录，文件名固定为 `executor.fsm`。
 
-### 步骤 3: 验证创建成功
+### 验证创建成功
+
+在项目根目录执行：
 
 ```bash
-ls -la executor.fsm
+python scripts/smoke_eval.py
 ```
 
-文件应存在且大小 > 0。
+至少应满足：
+
+1. 不再出现 `executor.fsm 未找到`
+2. `execute_script("return time();")` 返回非空结果
+3. `execute_script("createinstance(library().find('Source'), model()); return 'ok';")` 返回 `ok`
+
+### 脚本创建的当前状态
+
+- `create_executor_model.py` 现在主要用于验证启动链路和环境配置。
+- 它在当前环境下仍可能出现：启动成功，但 `evaluate()` 返回空结果、对象未真正创建、模型未保存。
+- 因此，**不要把“脚本跑完”当成 executor 已创建成功的依据**，必须以根目录 `executor.fsm` 实际存在且 `smoke_eval.py` 通过为准。
 
 ## 使用 executor.fsm
 
@@ -144,7 +158,7 @@ FlexSimPy 内部调用 `receiveFromController()`，从队列获取结果。
 FlexSimError: executor.fsm 未找到。请先运行 create_executor_model.py 创建执行器模型。
 ```
 
-**解决**: 运行 `python create_executor_model.py`
+**解决**: 优先按本文档的手工步骤在 FlexSim GUI 中创建 `executor.fsm`。
 
 ### 接收超时
 
@@ -161,17 +175,17 @@ FlexSimError: 接收 FlexScript 执行结果超时（5秒）
 1. 重新运行 `create_executor_model.py`
 2. 增加超时时间：`execute_script(script, timeout=30)`
 
-### evaluate 返回 None
+### evaluate 返回 None 或空字符串
 
-这是预期行为 - executor.fsm 的存在正是为了解决这个问题。
+这是当前环境下的已知现象。`executor.fsm` 的存在正是为了解决这个问题。
 
 使用 `execute_script()` 而非 `evaluate()` 来执行 FlexScript。
 
 ## 验收标准
 
-- [x] executor.fsm 文件创建成功
-- [x] executor.fsm 可通过 `controller.open('executor.fsm')` 加载
-- [x] executor.fsm 内含 OnMessage 触发器
-- [x] `execute_script("return time();")` 返回非 None 字符串
-- [x] `execute_script("createinstance(library().find('Source'), model()); return 'ok';")` 返回 `'ok'`
+- [ ] executor.fsm 文件创建成功
+- [ ] executor.fsm 可通过 `controller.open('executor.fsm')` 加载
+- [ ] executor.fsm 内含 OnMessage 触发器
+- [ ] `execute_script("return time();")` 返回非空字符串
+- [ ] `execute_script("createinstance(library().find('Source'), model()); return 'ok';")` 返回 `'ok'`
 - [x] 提供本文档说明制作过程
